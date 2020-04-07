@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+            html { height: 100% }
+            body { height: 100%; margin:0; padding:0 }
+            #map_div { width: 100%; height: 100% }
+        </style>
+
+        <script type="text/javascript" src="https://api.ktgis.com:10083/v3/olleh/mapAPI.js?key=ODEwMEQ3ODk6VDc3RkM5N0I2OEM2RDA="></script>
+        <script type="text/javascript">
+
+            let httpRequest;
+            let map;
+            let currentLocation;
+
+            // 맵 초기화 
+            function initMap(){
+
+                navigator.geolocation.getCurrentPosition((position) => {
+                    currentLocation = position.coords;
+                    // 초기화 옵션 설정
+                    map = new olleh.maps.Map(document.getElementById("map_div"), {
+                        center: new olleh.maps.LatLng(currentLocation.latitude, currentLocation.longitude),
+                        zoom: 12
+                    });
+
+                    // 초기 약국 데이터 로드
+                    initData();
+                });
+            }
+
+            function initData(){
+                // 검색 API 요청
+                httpRequest = new XMLHttpRequest();
+                if(!httpRequest){
+                    return false;
+                }
+                httpRequest.onreadystatechange = processResponseData;
+                httpRequest.open('GET', `https://gis.kt.com/search/v1.0/pois?category.code=CA_0305&point.lat=${currentLocation.latitude}&point.lng=${currentLocation.longitude}`);
+                httpRequest.setRequestHeader('Authorization', 'bearer 9886c37a33aca43c88541d669306b8fc431a710760ba0982c524eb30223ecbf657f880a9');
+                httpRequest.send();
+            }
+
+            function processResponseData(){
+                if(httpRequest.readyState === XMLHttpRequest.DONE){
+                    if(httpRequest.status === 200){
+                        const response = JSON.parse(httpRequest.responseText);
+                        drawMarer(response.pois)
+                    }else{
+                        console.log('error')
+                    }
+                }
+            }
+
+            function drawMarer(poiData){
+                poiData.forEach(element => {
+                    const { lat, lng } = element.point;
+                    const marker = new olleh.maps.overlay.Marker({
+                        position: new olleh.maps.LatLng(lat, lng),
+                        map: map
+                    });
+                    
+                    if(element.extension && element.extension.republicMask){
+                        const infowindow = new olleh.maps.overlay.InfoWindow({
+                            position: new olleh.maps.LatLng(lat, lng),
+                            maxWidth: 400,
+                            content: '<div>' + element.extension.republicMask.remainStat + '</div>'
+                        });
+                        infowindow.open(map);
+                    }
+                });
+            }
+            window.onload = initMap;
+        </script>
+    </head>
+
+    <body>
+        <div id="map_div"/>
+    </body>
+</html>
