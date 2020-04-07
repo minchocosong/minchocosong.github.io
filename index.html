@@ -3,7 +3,7 @@
     <head>
         <style>
             html { height: 100% }
-            body { height: 100%; margin:0; padding:0 }
+            body { height: 100%; margin:0; padding:0 } 
             #map_div { width: 100%; height: 100% }
         </style>
 
@@ -11,27 +11,40 @@
         <script type="text/javascript">
 
             let httpRequest;
-            let map;
+            let map, currentLocation, markerList = [], infowindowList = [];
+            
 
             // 맵 초기화 
             function initMap(){
-                // 초기화 옵션 설정
-                map = new olleh.maps.Map(document.getElementById("map_div"), {
-                    center: new olleh.maps.LatLng(37.57167619627095, 126.97970440031995),
-                    zoom: 12
+
+                navigator.geolocation.getCurrentPosition((position) => {
+                    currentLocation = position.coords;
+                    // 초기화 옵션 설정
+                    map = new olleh.maps.Map(document.getElementById("map_div"), {
+                        center: new olleh.maps.LatLng(currentLocation.latitude, currentLocation.longitude),
+                        zoom: 11
+                    });
+
+                    // 초기 약국 데이터 로드
+                    getData(currentLocation.latitude, currentLocation.longitude);
+
+                    // 마우스 이동 시 새로운 데이터 로드
+                    map.onEvent('mouseup', function()  {
+                        const { x, y } = map.getCenter(); 
+                        const centerPosition = olleh.maps.LatLng.valueOf(new olleh.maps.UTMK(x, y));
+                        getData(centerPosition.y, centerPosition.x);
+                    });                    
                 });
-                // 초기 약국 데이터 로드
-                initData();
             }
 
-            function initData(){
+            function getData(lat, lng){
                 // 검색 API 요청
                 httpRequest = new XMLHttpRequest();
                 if(!httpRequest){
                     return false;
                 }
                 httpRequest.onreadystatechange = processResponseData;
-                httpRequest.open('GET', 'https://gis.kt.com/search/v1.0/pois?category.code=CA_0305&point.lat=37.57167619627095&point.lng=126.97970440031995');
+                httpRequest.open('GET', `https://gis.kt.com/search/v1.0/pois?category.code=CA_0305&point.lat=${lat}&point.lng=${lng}`);
                 httpRequest.setRequestHeader('Authorization', 'bearer 9886c37a33aca43c88541d669306b8fc431a710760ba0982c524eb30223ecbf657f880a9');
                 httpRequest.send();
             }
@@ -40,30 +53,66 @@
                 if(httpRequest.readyState === XMLHttpRequest.DONE){
                     if(httpRequest.status === 200){
                         const response = JSON.parse(httpRequest.responseText);
-                        drawMarer(response.pois)
+                        drawMarker(response.pois)
                     }else{
                         console.log('error')
                     }
                 }
             }
 
-            function drawMarer(poiData){
+            function drawMarker(poiData){
+                removeOverlay();
                 poiData.forEach(element => {
                     const { lat, lng } = element.point;
                     const marker = new olleh.maps.overlay.Marker({
                         position: new olleh.maps.LatLng(lat, lng),
+                        title: element.name,
                         map: map
                     });
+                    markerList.push(marker);
                     
                     if(element.extension && element.extension.republicMask){
+                        
+                        const {remainStat, updatedTime, stockTime } = element.extension.republicMask;
+                        const infomessage = element.name + '<br/>' + getRemainStatType(remainStat) + ` (최근 입고 : ${stockTime})`;
                         const infowindow = new olleh.maps.overlay.InfoWindow({
-                            position: new olleh.maps.LatLng(lat, lng),
-                            maxWidth: 400,
-                            content: '<div>' + element.extension.republicMask.remainStat + '</div>'
+                            maxWidth: 50,
+                            content: `<div>${infomessage}</div>`
                         });
-                        infowindow.open(map);
+                        infowindow.open(map, marker);
+                        infowindowList.push(infowindow);
                     }
                 });
+            }
+
+            function removeOverlay(){
+                if(markerList){
+                    markerList.forEach(marker => {
+                        marker.setMap(null);
+                        marker.erase();
+                    });
+                    infowindowList.forEach(infowindow => {
+                        infowindow.close();
+                    });
+                    markerList = [];
+                    infowindowList = [];
+                }
+            }
+
+            function getRemainStatType(remainStat){
+                switch(remainStat){
+                    case 'empty':
+                        return '없음';
+                    case 'break':
+                        return '판매중지';
+                    case 'few':
+                        return '부족';
+                    case 'some':
+                        return '보통';
+                    case 'plenty':
+                        return '충분';
+                }
+
             }
             window.onload = initMap;
         </script>
