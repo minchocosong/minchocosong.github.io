@@ -10,35 +10,38 @@
         <script type="text/javascript" src="https://api.ktgis.com:10083/v3/olleh/mapAPI.js?key=ODEwMEQ3ODk6VDc3RkM5N0I2OEM2RDA="></script>
         <script type="text/javascript">
 
+            /* 
+               1. html 페이지 로드시 브라우저로부터 현 위치 전달
+               2. 현 위치를 중심으로 지도 생성 
+               3. 현 위치를 중심으로 검색 API 호출 
+               4. API 응답결과를 보기 좋게 정리하여 지도 위 마커, 인포윈도우 오버레이로 추가
+               5. 지도가 이동할 때 마다 기존에 생성된 오버레이를 삭제하고
+                  해당 위치 중심으로 API 호출 및 오버레이 추가 
+            */
+
             let httpRequest;
-            let map, currentLocation, markerList = [], infowindowList = [];
+            let map;
+            let currentLocation;
+            let markerList = [], infowindowList = []; // 
             
 
-            // 맵 초기화 
             function initMap(){
-
                 navigator.geolocation.getCurrentPosition((position) => {
                     currentLocation = position.coords;
-                    // 초기화 옵션 설정
                     map = new olleh.maps.Map(document.getElementById("map_div"), {
                         center: new olleh.maps.LatLng(currentLocation.latitude, currentLocation.longitude),
                         zoom: 11
                     });
-
-                    // 초기 약국 데이터 로드
                     getData(currentLocation.latitude, currentLocation.longitude);
-
-                    // 마우스 이동 시 새로운 데이터 로드
                     map.onEvent('mouseup', function()  {
                         const { x, y } = map.getCenter(); 
                         const centerPosition = olleh.maps.LatLng.valueOf(new olleh.maps.UTMK(x, y));
                         getData(centerPosition.y, centerPosition.x);
-                    });                    
+                    }, {passive:false});                    
                 });
             }
 
             function getData(lat, lng){
-                // 검색 API 요청
                 httpRequest = new XMLHttpRequest();
                 if(!httpRequest){
                     return false;
@@ -61,6 +64,7 @@
             }
 
             function drawMarker(poiData){
+                // 1. 기존에 저장된 오버레이 일괄 삭제
                 removeOverlay();
                 poiData.forEach(element => {
                     const { lat, lng } = element.point;
@@ -69,17 +73,20 @@
                         title: element.name,
                         map: map
                     });
+                    // 1. 생성되는 마커 array 저장
                     markerList.push(marker);
                     
                     if(element.extension && element.extension.republicMask){
                         
                         const {remainStat, updatedTime, stockTime } = element.extension.republicMask;
+                        // 2. text 데이터 가공
                         const infomessage = element.name + '<br/>' + getRemainStatType(remainStat) + ` (최근 입고 : ${stockTime})`;
                         const infowindow = new olleh.maps.overlay.InfoWindow({
                             maxWidth: 50,
                             content: `<div>${infomessage}</div>`
                         });
                         infowindow.open(map, marker);
+                        // 3. 생성되는 인포윈도우 array 저장
                         infowindowList.push(infowindow);
                     }
                 });
@@ -112,7 +119,6 @@
                     case 'plenty':
                         return '충분';
                 }
-
             }
             window.onload = initMap;
         </script>
